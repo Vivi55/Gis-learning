@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Demo2</title>
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+	  #srDiv{
+        height: 40px;
+        padding: 10px;
+      }
+    </style>
+    <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.28/"></script>
+    <script>      
+      require(["esri/Map", 
+      "esri/views/MapView",
+      "esri/Basemap",
+      "esri/layers/TileLayer",
+      "esri/layers/FeatureLayer"
+    ], (Map, MapView, Basemap, TileLayer, FeatureLayer) => {
+      let basemap = new Basemap({
+          baseLayers: [
+            new TileLayer({
+              url: "http://map.geoq.cn/arcgis/rest/services/ChinaOnlineStreetPurplishBlue/MapServer",
+              title: "Basemap"
+            })
+          ],
+          title: "basemap",
+          id: "basemap"
+        });
+
+        let map = new Map({
+          basemap: basemap
+        });
+        let view = new MapView({
+          container: "viewDiv",
+          map: map,
+          zoom: 4,
+          center: [-100, 40]
+        });        
+
+        let layer = new FeatureLayer({
+          // URL to the service
+          url: "https://sampleserver6.arcgisonline.com/arcgis/rest/services/USA/MapServer/0"
+        });
+        
+        map.add(layer);
+        view.ui.add("toggle-button", "top-left");//添加绘制线按钮，自定义UI
+                view.when(function () {
+          var toggleButton = document.getElementById("toggle-button");   
+          let toggle = true;          
+          toggleButton.onclick = function() {                       
+            toggleDisplayLayer(toggle);    
+            toggle = !toggle;               
+          };
+        })
+        
+        function toggleDisplayLayer(toggle) {          
+          if(toggle){
+            map.remove(layer);                 
+          }else{
+            map.add(layer);           
+          } 
+
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div id="viewDiv">
+      <div id="toggle-button" class="esri-widget esri-widget--button esri-interactive" title="Toggle display layer">
+        <span class="esri-icon-dock-left"></span>
+      </div>
+    </div>
+  </body>
+</html>

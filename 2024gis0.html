@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>Query client-side 3D extents | 2024gis</title>
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+      #infoDiv {
+        background-color: rgba(255, 255, 255, 0.9);
+        padding: 10px;
+      }
+    </style>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.28/"></script>
+
+    <script>
+      require([
+      "esri/rest/locator", 
+        "esri/Map", 
+        "esri/views/MapView",
+        "esri/widgets/Locate",
+        "esri/layers/GraphicsLayer",
+        "esri/views/draw/Draw",
+        "esri/Graphic",
+        "esri/geometry/Polyline",
+        "esri/geometry/Polygon",
+        "esri/geometry/Point",
+        "esri/geometry/Circle",
+        "esri/widgets/AreaMeasurement2D",
+        "esri/widgets/DistanceMeasurement2D",
+        "esri/WebScene", 
+        "esri/views/SceneView", 
+        "esri/rest/support/Query"], 
+        (locator, Map, MapView, Locate, GraphicsLayer, Draw, Graphic, Polyline, 
+      Polygon, Point, Circle, AreaMeasurement2D, DistanceMeasurement2D,WebScene, SceneView, Query) => {
+        // Set up a locator url using the world geocoding service
+        const locatorUrl = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer";
+        const graphicsLayer = new GraphicsLayer();
+
+        // load web scene from ArcGIS Online
+        const webscene = new WebScene({
+          portalItem: {
+            // autocasts as new PortalItem()
+            id: "cdb4415be735405ca2f2972ae23a2058"
+          }
+        });
+
+        // create the scene view
+        const view = new SceneView({
+          container: "viewDiv",
+          map: webscene
+        });
+        //添加点/线/面/圆形/矩形
+        view.ui.add("point-button", "top-left");//添加绘制点按钮，自定义UI
+        view.ui.add("line-button", "top-left");//添加绘制线按钮，自定义UI
+        view.ui.add("area-button", "top-left");//添加绘制面按钮，自定义UI       
+        view.ui.add("circle-button", "top-left");//添加绘制圆按钮，自定义UI
+        view.ui.add("rectangle-button", "top-left");//添加绘制矩形按钮，自定义UI
+        view.when(function () {
+          var draw = new Draw({
+              view: view
+          });
+          //绑定线按钮绘制事件
+          var drawLineButton = document.getElementById("line-button");
+          drawLineButton.onclick = function() {
+              view.graphics.removeAll();//清楚之前的绘制
+              enableCreateLine(draw, view);
+          };
+          //绑定面按钮绘制事件
+          var drawAreaButton = document.getElementById("area-button");
+          drawAreaButton.onclick = function() {
+              view.graphics.removeAll();//清楚之前的绘制
+              enableCreateArea(draw, view);
+          };
+          //绑定点按钮绘制事件
+          var drawPointButton = document.getElementById("point-button");
+          drawPointButton.onclick = function() {
+              enableCreatePoint(draw, view);
+          };
+          //绑定画圆按钮绘制事件
+          var drawCircleButton = document.getElementById("circle-button");
+          drawCircleButton.onclick = function() {
+              enableCreateCircle(draw, view);
+          };
+          //绑定矩形按钮绘制事件
+          var drawRectangleButton = document.getElementById("rectangle-button");
+          drawRectangleButton.onclick = function() {
+              enableCreateRectangle(draw, view);
+          };
+      });
+      //开始监听画线
+      function enableCreateLine(draw, view) {
+          var action = draw.create("polyline", {
+              mode: "click"
+          });
+          // 获取焦点
+          view.focus();
+
+          // 顶点添加事件
+          action.on("vertex-add", createPolyline);
+
+
+          //顶点移除事件
+          action.on("vertex-remove", createPolyline);
+
+
+          // 鼠标移动事件
+          action.on("cursor-update", createPolyline);
+          
+
+          // 绘制完成事件
+          action.on("draw-complete", createPolyline);
+
+
+      }
+      //开始监听画面
+      function enableCreateArea(draw, view) {
+          var action = draw.create("polygon", {
+              mode: "click"//点击方式加点
+          });
+          // 获取焦点
+          view.focus();
+
+          // 顶点添加事件
+          action.on("vertex-add", createPolygon);
+
+
+          //顶点移除事件
+          action.on("vertex-remove", createPolygon);
+
+
+          // 鼠标移动事件
+          action.on("cursor-update", createPolygon);
+
+
+          // 绘制完成事件
+          action.on("draw-complete", createPolygon);
+
+
+      }
+      //开始监听画点
+      function enableCreatePoint(draw, view) {
+          var action = draw.create("point", {
+              mode: "click"//点击方式加点
+          });
+          // 获取焦点
+          view.focus();
+
+          // vertex-add 顶点添加事件 vertex-remove 顶点移除事件 draw-complete 绘制完成事件
+          action.on(['vertex-add', 'vertex-remove', 'draw-complete'], createPoint)
+      }
+      //开始监听画圆
+      function enableCreateCircle(draw, view) {
+          var action = draw.create("circle", {
+              mode: "click"//点击方式加点
+          });
+          // 获取焦点
+          view.focus();
+          //顶点移除事件
+          action.on("vertex-remove", createCircle);
+          // 鼠标移动事件
+          action.on("cursor-update", createCircle);
+          // 绘制完成事件
+          action.on("draw-complete", createCircle);
+      }
+      //开始监听画矩形
+      function enableCreateRectangle(draw, view) {
+          var action = draw.create("rectangle", {
+              mode: "click"//点击方式加点
+          });
+          // 获取焦点
+          view.focus();
+
+          //顶点移除事件
+          action.on("vertex-remove", createRectangle);
+          // 鼠标移动事件
+          action.on("cursor-update", createRectangle);
+          // 绘制完成事件
+          action.on("draw-complete", createRectangle);
+
+      }
+      //根据点坐标生成新的线
+      function createPolyline(event) {
+          //获取所有顶点
+          var vertices = event.vertices;
+          //清除之前绘制
+          view.graphics.removeAll();
+          // 生成绘制的图形
+          var graphic = new Graphic({
+              geometry: new Polyline({
+                  paths: vertices,
+                  spatialReference: view.spatialReference
+              }),
+              symbol: {
+                  type: "simple-line", // autocasts as new SimpleFillSymbol
+                  color: [4, 90, 141],
+                  width: 4,
+                  cap: "round",
+                  join: "round"
+              }
+          });
+         // 将绘制的图形添加到view
+          view.graphics.add(graphic);
+      };
+      //根据点坐标生成新的面
+      function createPolygon(event) {
+          //获取所有顶点
+          var vertices = event.vertices;
+          //清除之前绘制
+          view.graphics.removeAll();
+
+          // 生成绘制的图形
+          var graphic = new Graphic({
+              geometry: new Polygon({
+                  hasZ: false,
+                  hasM: false,
+                  rings: [vertices],
+                  spatialReference: view.spatialReference
+              }),
+              symbol: {
+                  type: "simple-fill",  // autocasts as new SimpleFillSymbol()
+                  color: [ 51,51, 204, 0.9 ],
+                  style: "solid",
+                  outline: {  // autocasts as new SimpleLineSymbol()
+                      color: "white",
+                      width: 1
+                  }
+              }
+          });
+          // 将绘制的图形添加到view
+          view.graphics.add(graphic);
+      }
+
+      //根据点坐标生成新的点
+      function createPoint(event) {
+          //获取所有顶点
+          var coordinates = event.coordinates;
+
+          //生成绘制的图形
+          var graphic = new Graphic({
+              geometry: new Point({
+                  hasZ: false,
+                  hasM: false,
+                  x:coordinates[0],
+                  y:coordinates[1],
+                  spatialReference: view.spatialReference
+              }),
+              symbol: {
+                  type: "simple-marker",  // autocasts as new SimpleMarkerSymbol()
+                  style: "square",
+                  color: "blue",
+                  size: "8px",  // pixels
+                  outline: {  // autocasts as new SimpleLineSymbol()
+                      color: [ 255, 255, 0 ],
+                      width: 3  // points
+                  }
+              }
+          });
+          // 将绘制的图形添加到view
+          view.graphics.add(graphic);
+      }
+      //根据点坐标生成新的线
+      function createCircle(event) {
+          //获取所有顶点
+          var vertices = event.vertices;
+          //少于一个点无法展示圆
+          if(vertices.length<2){
+              return
+          }
+          //清除之前绘制
+          view.graphics.removeAll();
+          //生成绘制的图形,两点画圆
+          var center=new Point({
+              hasZ: false,
+              hasM: false,
+              x:vertices[0][0],
+              y:vertices[0][1],
+              spatialReference: view.spatialReference
+          });
+          var dis=center.distance(new Point({
+              hasZ: false,
+              hasM: false,
+              x:vertices[1][0],
+              y:vertices[1][1],
+              spatialReference: view.spatialReference
+          }));
+          var graphic = new Graphic({
+              geometry: new Circle({
+                  hasZ: false,
+                  hasM: false,
+                  center:center,
+                  radius:dis,
+                  spatialReference: view.spatialReference
+              }),
+              symbol: {
+                  type: "simple-fill",  // autocasts as new SimpleFillSymbol()
+                  color: [ 51,51, 204, 0.9 ],
+                  style: "solid",
+                  outline: {  // autocasts as new SimpleLineSymbol()
+                      color: "white",
+                      width: 1
+                  }
+              }
+          });
+          // 将绘制的图形添加到view
+          view.graphics.add(graphic);
+      }
+      function createRectangle(event) {
+          //获取所有顶点
+          var vertices = event.vertices;
+
+          //两点画矩形
+          if(vertices.length<2){
+              return
+          }
+          var rings=[vertices[0],[vertices[0][0],vertices[1][1]],vertices[1],[vertices[1][0],vertices[0][1]]];
+          //清除之前绘制
+          view.graphics.removeAll();
+
+          // 生成绘制的图形
+          var graphic = new Graphic({
+              geometry: new Polygon({
+                  hasZ: false,
+                  hasM: false,
+                  rings: [rings],
+                  spatialReference: view.spatialReference
+              }),
+              symbol: {
+                  type: "simple-fill",  // autocasts as new SimpleFillSymbol()
+                  color: [ 51,51, 204, 0.9 ],
+                  style: "solid",
+                  outline: {  // autocasts as new SimpleLineSymbol()
+                      color: "white",
+                      width: 1
+                  }
+              }
+          });
+          // 将绘制的图形添加到view
+          view.graphics.add(graphic);
+      }
+      //定位
+      const locateBtn = new Locate({
+          view: view
+        });
+          // Add the locate widget to the top left corner of the view
+        view.ui.add(locateBtn, {position: "top-left"});
+
+//弹出窗口在点击某个点之后
+        //Click event
+        view.popupEnabled = false;      
+        view.on("click", (event) => {
+          // Get the coordinates of the click on the view
+          const lat = Math.round(event.mapPoint.latitude * 1000) / 1000;
+          const lon = Math.round(event.mapPoint.longitude * 1000) / 1000;
+
+          view.openPopup({
+            // Set the popup's title to the coordinates of the location
+            title: "Reverse geocode: [" + lon + ", " + lat + "]",
+            location: event.mapPoint // Set the location of the popup to the clicked location
+          });
+
+          const params = {
+            location: event.mapPoint
+          };
+
+          // Display the popup
+          // Execute a reverse geocode using the clicked location
+          locator
+            .locationToAddress(locatorUrl, params)
+            .then((response) => {
+              // If an address is successfully found, show it in the popup's content
+              view.popup.content = response.address;
+            })
+            .catch(() => {
+              // If the promise fails and no result is found, show a generic message
+              view.popup.content = "No address was found for this location";
+            });
+        });
+//测距
+        view.ui.add("distance-button", "top-left");
+        view.ui.add("acreage-button", "top-left");
+        // create the measurement widgets and hide them by default
+        const distanceMeasurement2D = new DistanceMeasurement2D({
+          view,
+          visible: false
+        });
+        const areaMeasurement2D = new AreaMeasurement2D({
+          view,
+          visible: false
+        });
+        document.getElementById("distance-button").addEventListener("click", function() {
+          setActiveWidget(null);
+          if (!this.classList.contains("active")) {
+            setActiveWidget("distance");
+          } else {
+            setActiveButton(null);
+          }
+        });
+
+        // event listener for area measurements
+        document.getElementById("acreage-button").addEventListener("click", function() {
+          setActiveWidget(null);
+          if (!this.classList.contains("active")) {
+            setActiveWidget("area");
+          } else {
+            setActiveButton(null);
+          }
+        });
+        function setActiveWidget(type) {
+          switch (type) {
+            case "distance":
+              areaMeasurement2D.visible = false;
+              distanceMeasurement2D.visible = true;
+              distanceMeasurement2D.viewModel.start();
+              setActiveButton(document.getElementById("distance-button"));
+              break;
+            case "area":
+              distanceMeasurement2D.visible = false;
+              areaMeasurement2D.visible = true;
+              areaMeasurement2D.viewModel.start();
+              setActiveButton(document.getElementById("acreage-button"));
+              break;
+            case null:
+              areaMeasurement2D.visible = false;
+              distanceMeasurement2D.visible = false;
+              break;
+          }
+        }
+
+        function setActiveButton(selectedButton) {
+          // focus the view to activate keyboard shortcuts for sketching
+          view.focus();
+          let elements = document.getElementsByClassName("active");
+          for (let i = 0; i < elements.length; i++) {
+            elements[i].classList.remove("active");
+          }
+          if (selectedButton) {
+            selectedButton.classList.add("active");
+          }
+        }
+
+
+      });
+
+        // wait until the webscene finished loading
+        webscene.when(() => {
+          // retrieve the scene layer from the webscene - in this case it is the first layer
+          const sceneLayer = webscene.layers.getItemAt(0);
+          // get all attributes for the query
+          sceneLayer.outFields = ["*"];
+
+          // retrieve the layer view of the scene layer
+          view.whenLayerView(sceneLayer).then((sceneLayerView) => {
+            // register a click event on the view
+            view.on("click", (event) => {
+              // use hitTest to find if any graphics were clicked
+              view.hitTest(event).then((response) => {
+                // check if a graphic is returned from the hitTest
+                if (response.results[0] && response.results[0].graphic) {
+                  // Create query object: by specifying objectIds, the query will return results only for
+                  // the feature matching the graphic's objectid
+                  const query = new Query({
+                    objectIds: [response.results[0].graphic.attributes.OBJECTID],
+                    // indicates the query should return all attributes
+                    outFields: ["*"]
+                  });
+
+                  // queryExtent() will return the 3D extent of the feature that satisfies the query
+                  sceneLayerView.queryExtent(query).then((result) => {
+                    view
+                      .goTo(
+                        {
+                          target: result.extent.expand(2),
+                          tilt: 60
+                        },
+                        {
+                          duration: 1000,
+                          easing: "out-expo"
+                        }
+                      )
+                      .catch((error) => {
+                        if (error.name != "AbortError") {
+                          console.error(error);
+                        }
+                      });
+                  });
+                }
+              });
+            });
+          });
+        
+
+        // add HTML element to the view
+        view.ui.add(document.getElementById("infoDiv"), "top-right");
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="infoDiv" class="esri-widget">Click on a building to zoom to it and get more information</div>
+    <div id="viewDiv">
+      <div id="line-button" class="esri-widget esri-widget--button esri-interactive" title="画线">
+          <span class="esri-icon-polyline"></span>
+      </div>
+      <div id="area-button" class="esri-widget esri-widget--button esri-interactive" title="画面">
+          <span class="esri-icon-polygon"></span>
+      </div>
+      <div id="point-button" class="esri-widget esri-widget--button esri-interactive" title="画点">
+          <span class="esri-icon-radio-checked"></span>
+      </div>
+      <div id="circle-button" class="esri-widget esri-widget--button esri-interactive" title="画圆">
+          <span class="esri-icon-radio-unchecked"></span>
+      </div>
+      <div id="rectangle-button" class="esri-widget esri-widget--button esri-interactive" title="画矩形">
+          <span class="esri-icon-checkbox-unchecked"></span>
+      </div>
+      <div id="distance-button" class="esri-widget esri-widget--button esri-interactive" title="折线距离">
+        <span class="esri-icon-measure-line"></span>
+      </div>
+      <div id="acreage-button" class="esri-widget esri-widget--button esri-interactive" title="计算面积">
+        <span class="esri-icon-measure-area"></span>
+      </div>
+    </div>
+    <div id="instruction" class="esri-widget">Click any location on the map to see its street address</div>
+  </body>
+</html>
